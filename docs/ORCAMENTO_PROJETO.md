@@ -1,8 +1,8 @@
-# 💰 Orçamento DocManager - Evolução MVP para Produção
+# 💰 Orçamento ACDocs - Evolução MVP para Produção
 
 ## 📋 Resumo Executivo
 
-**Projeto**: DocManager - Sistema de Gerenciamento de Documentos  
+**Projeto**: ACDocs - Sistema de Gerenciamento de Documentos  
 **Status Atual**: MVP Frontend Completo  
 **Próxima Fase**: Backend + Infraestrutura + Testes Alpha  
 **Prazo Estimado**: 8-12 semanas  

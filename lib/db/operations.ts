@@ -458,3 +458,22 @@ export async function logoutUser(userId: string, userName: string): Promise<void
     resourceName: userName,
   });
 }
+
+// Helper function to reset database (useful for development/debugging)
+export async function resetDatabase(): Promise<void> {
+  const db = await getDB();
+  
+  const tx = db.transaction(['users', 'groups', 'categories', 'documents', 'documentTypes', 'auditLogs'], 'readwrite');
+  
+  await tx.objectStore('users').clear();
+  await tx.objectStore('groups').clear();
+  await tx.objectStore('categories').clear();
+  await tx.objectStore('documents').clear();
+  await tx.objectStore('documentTypes').clear();
+  await tx.objectStore('auditLogs').clear();
+  
+  await tx.done;
+  
+  // Re-seed the database
+  await seedDatabase();
+}

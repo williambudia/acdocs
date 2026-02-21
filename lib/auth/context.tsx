@@ -15,7 +15,7 @@ interface AuthContextType {
   isRole: (...roles: Role[]) => boolean;
 }
 
-const AUTH_STORAGE_KEY = "docmanager_auth_user";
+const AUTH_STORAGE_KEY = "acdocs_auth_user";
 
 const AuthContext = createContext<AuthContextType | null>(null);
 

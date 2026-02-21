@@ -13,7 +13,8 @@ import {
   Plus,
   X,
   Filter,
-  CalendarDays,
+  AlertTriangle,
+  Calendar,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -65,6 +66,8 @@ import { useDocuments, useCreateDocument, useDeleteDocument } from "@/lib/querie
 import { useCategories } from "@/lib/queries/categories";
 import { useUsers } from "@/lib/queries/users";
 import type { Document } from "@/lib/types";
+import { getExpirationStatus, getDaysUntilExpiration } from "@/lib/types";
+import { Checkbox } from "@/components/ui/checkbox";
 
 function formatBytes(bytes: number) {
   if (bytes === 0) return "0 B";
@@ -72,6 +75,49 @@ function formatBytes(bytes: number) {
   const sizes = ["B", "KB", "MB", "GB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+}
+
+function getExpirationBadge(doc: Document, t: any) {
+  if (!doc.expiresAt) return null;
+  
+  const status = getExpirationStatus(doc.expiresAt);
+  const days = getDaysUntilExpiration(doc.expiresAt);
+  
+  const variants = {
+    expired: "destructive",
+    critical: "destructive",
+    warning: "default",
+    normal: "secondary",
+    none: "secondary",
+  } as const;
+  
+  const icons = {
+    expired: <AlertTriangle className="size-3" />,
+    critical: <AlertTriangle className="size-3" />,
+    warning: <Clock className="size-3" />,
+    normal: <Clock className="size-3" />,
+    none: null,
+  };
+  
+  if (status === "expired") {
+    return (
+      <Badge variant={variants[status]} className="gap-1 text-xs">
+        {icons[status]}
+        {t.documents.expired}
+      </Badge>
+    );
+  }
+  
+  if (days !== null) {
+    return (
+      <Badge variant={variants[status]} className="gap-1 text-xs">
+        {icons[status]}
+        {days === 0 ? t.documents.expiresToday : `${days} ${days === 1 ? t.documents.day : t.documents.days}`}
+      </Badge>
+    );
+  }
+  
+  return null;
 }
 
 export function DocumentsPage() {
@@ -91,6 +137,7 @@ export function DocumentsPage() {
   const [filterUploadedBy, setFilterUploadedBy] = useState<string>("all");
   const [filterDateFrom, setFilterDateFrom] = useState<string>("");
   const [filterDateTo, setFilterDateTo] = useState<string>("");
+  const [filterExpirationStatus, setFilterExpirationStatus] = useState<string>("all");
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [showVersionsDialog, setShowVersionsDialog] = useState<Document | null>(
     null
@@ -102,6 +149,9 @@ export function DocumentsPage() {
   const [uploadCategoryId, setUploadCategoryId] = useState("");
   const [uploadTypeId, setUploadTypeId] = useState("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadHasExpiration, setUploadHasExpiration] = useState(false);
+  const [uploadExpiresAt, setUploadExpiresAt] = useState("");
+  const [uploadAlertDays, setUploadAlertDays] = useState("30");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
@@ -138,7 +188,13 @@ export function DocumentsPage() {
       return true;
     })();
     
-    return matchesSearch && matchesCategory && matchesDocumentType && matchesUploadedBy && matchesDateRange;
+    const matchesExpirationStatus = (() => {
+      if (filterExpirationStatus === "all") return true;
+      const status = getExpirationStatus(doc.expiresAt);
+      return status === filterExpirationStatus;
+    })();
+    
+    return matchesSearch && matchesCategory && matchesDocumentType && matchesUploadedBy && matchesDateRange && matchesExpirationStatus;
   });
 
   const selectedCategory = categories.find((c) => c.id === uploadCategoryId);
@@ -157,6 +213,8 @@ export function DocumentsPage() {
         documentTypeId: uploadTypeId,
         uploadedById: user.id,
         currentVersion: 1,
+        expiresAt: uploadHasExpiration && uploadExpiresAt ? uploadExpiresAt : undefined,
+        alertDaysBefore: uploadHasExpiration && uploadAlertDays ? parseInt(uploadAlertDays) : undefined,
         versions: [{
           id: `v-${Date.now()}`,
           documentId: `doc-${Date.now()}`,
@@ -193,6 +251,9 @@ export function DocumentsPage() {
     setUploadCategoryId("");
     setUploadTypeId("");
     setUploadFile(null);
+    setUploadHasExpiration(false);
+    setUploadExpiresAt("");
+    setUploadAlertDays("30");
   };
 
   const clearAllFilters = () => {
@@ -202,10 +263,11 @@ export function DocumentsPage() {
     setFilterUploadedBy("all");
     setFilterDateFrom("");
     setFilterDateTo("");
+    setFilterExpirationStatus("all");
   };
 
   const hasActiveFilters = search || filterCategory !== "all" || filterDocumentType !== "all" || 
-    filterUploadedBy !== "all" || filterDateFrom || filterDateTo;
+    filterUploadedBy !== "all" || filterDateFrom || filterDateTo || filterExpirationStatus !== "all";
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString(undefined, {
@@ -263,7 +325,7 @@ export function DocumentsPage() {
 
         {/* Filtros Avançados em Accordion */}
         <Accordion type="single" collapsible className="w-full">
-          <AccordionItem value="filters" className="border rounded-lg">
+          <AccordionItem value="filters" className="border rounded-lg !border-b">
             <AccordionTrigger className="px-4 py-3 hover:no-underline">
               <div className="flex items-center gap-2">
                 <Filter className="size-4" />
@@ -274,19 +336,20 @@ export function DocumentsPage() {
                       filterCategory !== "all" && "Categoria",
                       filterDocumentType !== "all" && "Tipo", 
                       filterUploadedBy !== "all" && "Usuário",
+                      filterExpirationStatus !== "all" && "Validade",
                       (filterDateFrom || filterDateTo) && "Data"
                     ].filter(Boolean).length} ativo(s)
                   </Badge>
                 )}
               </div>
             </AccordionTrigger>
-            <AccordionContent className="px-4 pb-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            <AccordionContent className="px-4 pb-4 pt-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
                 {/* Filtro por Categoria */}
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Categoria</Label>
                   <Select value={filterCategory} onValueChange={setFilterCategory}>
-                    <SelectTrigger>
+                    <SelectTrigger className="w-full">
                       <SelectValue placeholder="Todas as categorias" />
                     </SelectTrigger>
                     <SelectContent>
@@ -304,7 +367,7 @@ export function DocumentsPage() {
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Tipo de Documento</Label>
                   <Select value={filterDocumentType} onValueChange={setFilterDocumentType}>
-                    <SelectTrigger>
+                    <SelectTrigger className="w-full">
                       <SelectValue placeholder="Todos os tipos" />
                     </SelectTrigger>
                     <SelectContent>
@@ -327,7 +390,7 @@ export function DocumentsPage() {
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Enviado por</Label>
                   <Select value={filterUploadedBy} onValueChange={setFilterUploadedBy}>
-                    <SelectTrigger>
+                    <SelectTrigger className="w-full">
                       <SelectValue placeholder="Todos os usuários" />
                     </SelectTrigger>
                     <SelectContent>
@@ -341,16 +404,47 @@ export function DocumentsPage() {
                   </Select>
                 </div>
 
+                {/* Filtro por Status de Validade */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Status de Validade</Label>
+                  <Select value={filterExpirationStatus} onValueChange={setFilterExpirationStatus}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Todos os status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os status</SelectItem>
+                      <SelectItem value="expired">
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="size-3 text-destructive" />
+                          Vencidos
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="critical">
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="size-3 text-orange-500" />
+                          Críticos (≤7 dias)
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="warning">
+                        <div className="flex items-center gap-2">
+                          <Clock className="size-3 text-yellow-600" />
+                          Atenção (≤30 dias)
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="normal">Normal (&gt;30 dias)</SelectItem>
+                      <SelectItem value="none">Sem validade</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 {/* Filtro por Período - Date Range */}
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium">Período</Label>
-                  <div className="space-y-3">
-                    {/* Presets rápidos */}
-                    <div className="flex flex-wrap gap-1">
-                      <Button
+                  <div className="flex items-center gap-2">
+                    <Label className="text-sm font-medium">Período</Label>
+                    <div className="flex gap-1">
+                      <Badge
                         variant="outline"
-                        size="sm"
-                        className="text-xs h-7"
+                        className="cursor-pointer hover:bg-accent text-xs px-2 py-0.5"
                         onClick={() => {
                           const today = new Date();
                           const lastWeek = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -358,12 +452,11 @@ export function DocumentsPage() {
                           setFilterDateTo(today.toISOString().split('T')[0]);
                         }}
                       >
-                        7 dias
-                      </Button>
-                      <Button
+                        7d
+                      </Badge>
+                      <Badge
                         variant="outline"
-                        size="sm"
-                        className="text-xs h-7"
+                        className="cursor-pointer hover:bg-accent text-xs px-2 py-0.5"
                         onClick={() => {
                           const today = new Date();
                           const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
@@ -371,57 +464,41 @@ export function DocumentsPage() {
                           setFilterDateTo(today.toISOString().split('T')[0]);
                         }}
                       >
-                        30 dias
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-xs h-7"
-                        onClick={() => {
-                          setFilterDateFrom("");
-                          setFilterDateTo("");
-                        }}
-                      >
-                        Limpar
-                      </Button>
+                        30d
+                      </Badge>
+                      {(filterDateFrom || filterDateTo) && (
+                        <Badge
+                          variant="secondary"
+                          className="cursor-pointer hover:bg-secondary/80 text-xs px-2 py-0.5"
+                          onClick={() => {
+                            setFilterDateFrom("");
+                            setFilterDateTo("");
+                          }}
+                        >
+                          <X className="size-3" />
+                        </Badge>
+                      )}
                     </div>
-                    
-                    {/* Range personalizado */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="relative">
-                        <CalendarDays className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          type="date"
-                          placeholder="Data inicial"
-                          value={filterDateFrom}
-                          onChange={(e) => setFilterDateFrom(e.target.value)}
-                          className="pl-10 text-sm"
-                        />
-                      </div>
-                      <div className="relative">
-                        <CalendarDays className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          type="date"
-                          placeholder="Data final"
-                          value={filterDateTo}
-                          onChange={(e) => setFilterDateTo(e.target.value)}
-                          className="pl-10 text-sm"
-                        />
-                      </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Input
+                        type="date"
+                        placeholder="Data inicial"
+                        value={filterDateFrom}
+                        onChange={(e) => setFilterDateFrom(e.target.value)}
+                        className="w-full"
+                      />
                     </div>
-                    
-                    {/* Indicador do range selecionado */}
-                    {(filterDateFrom || filterDateTo) && (
-                      <div className="text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1">
-                        {filterDateFrom && filterDateTo ? (
-                          <>De {new Date(filterDateFrom).toLocaleDateString()} até {new Date(filterDateTo).toLocaleDateString()}</>
-                        ) : filterDateFrom ? (
-                          <>A partir de {new Date(filterDateFrom).toLocaleDateString()}</>
-                        ) : (
-                          <>Até {new Date(filterDateTo).toLocaleDateString()}</>
-                        )}
-                      </div>
-                    )}
+                    <div className="relative flex-1">
+                      <Input
+                        type="date"
+                        placeholder="Data final"
+                        value={filterDateTo}
+                        onChange={(e) => setFilterDateTo(e.target.value)}
+                        className="w-full"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -457,6 +534,9 @@ export function DocumentsPage() {
                   </TableHead>
                   <TableHead className="hidden md:table-cell">
                     {t.documents.fileSize}
+                  </TableHead>
+                  <TableHead className="hidden lg:table-cell">
+                    Validade
                   </TableHead>
                   <TableHead className="hidden md:table-cell">
                     {t.documents.version}
@@ -495,6 +575,11 @@ export function DocumentsPage() {
                       </TableCell>
                       <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
                         {formatBytes(doc.fileSize)}
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell">
+                        {getExpirationBadge(doc, t) || (
+                          <span className="text-xs text-muted-foreground">{t.documents.noExpiration}</span>
+                        )}
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
                         <Badge variant="outline" className="text-xs">
@@ -548,7 +633,7 @@ export function DocumentsPage() {
                 })}
                 {filteredDocuments.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-32 text-center">
+                    <TableCell colSpan={7} className="h-32 text-center">
                       <div className="flex flex-col items-center gap-2">
                         <FileText className="size-8 text-muted-foreground/30" />
                         <p className="text-muted-foreground">
@@ -623,6 +708,54 @@ export function DocumentsPage() {
                 </Select>
               </div>
             )}
+            
+            {/* Expiration Section */}
+            <div className="flex flex-col gap-3 pt-2 border-t">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="hasExpiration"
+                  checked={uploadHasExpiration}
+                  onCheckedChange={(checked) => setUploadHasExpiration(checked === true)}
+                />
+                <Label htmlFor="hasExpiration" className="text-sm font-normal cursor-pointer">
+                  {t.documents.hasExpiration}
+                </Label>
+              </div>
+              
+              {uploadHasExpiration && (
+                <div className="grid grid-cols-2 gap-3 pl-6">
+                  <div className="flex flex-col gap-2">
+                    <Label className="text-sm">{t.documents.expiresAt}</Label>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        type="date"
+                        value={uploadExpiresAt}
+                        onChange={(e) => setUploadExpiresAt(e.target.value)}
+                        className="pl-10"
+                        min={new Date().toISOString().split('T')[0]}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label className="text-sm">Alertar com</Label>
+                    <Select value={uploadAlertDays} onValueChange={setUploadAlertDays}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="7">7 dias antes</SelectItem>
+                        <SelectItem value="15">15 dias antes</SelectItem>
+                        <SelectItem value="30">30 dias antes</SelectItem>
+                        <SelectItem value="60">60 dias antes</SelectItem>
+                        <SelectItem value="90">90 dias antes</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
+            </div>
+            
             <div className="flex flex-col gap-2">
               <Label>{t.documents.uploadFile}</Label>
               <div

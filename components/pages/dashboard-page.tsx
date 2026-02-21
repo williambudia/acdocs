@@ -15,6 +15,9 @@ import {
   LogIn,
   Pencil,
   Plus,
+  AlertTriangle,
+  Clock,
+  ArrowRight,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,6 +31,7 @@ import { useGroups } from "@/lib/queries/groups";
 import { useUsers } from "@/lib/queries/users";
 import { useAuditLogs } from "@/lib/queries/audit";
 import type { AuditAction } from "@/lib/types";
+import { getExpirationStatus, getDaysUntilExpiration } from "@/lib/types";
 
 const actionIcons: Record<AuditAction, React.ElementType> = {
   upload: Upload,
@@ -66,6 +70,13 @@ export function DashboardPage() {
   const isLoading = documentsLoading || categoriesLoading || groupsLoading || usersLoading || auditLoading;
 
   if (isLoading) return <DashboardSkeleton />;
+
+  // Expiration alerts
+  const expiredDocs = documents.filter(doc => getExpirationStatus(doc.expiresAt) === "expired");
+  const criticalDocs = documents.filter(doc => getExpirationStatus(doc.expiresAt) === "critical");
+  const warningDocs = documents.filter(doc => getExpirationStatus(doc.expiresAt) === "warning");
+  const alertDocs = [...expiredDocs, ...criticalDocs, ...warningDocs].slice(0, 5);
+  const hasAlerts = expiredDocs.length > 0 || criticalDocs.length > 0 || warningDocs.length > 0;
 
   const stats = [
     {
@@ -131,6 +142,146 @@ export function DashboardPage() {
           </Card>
         ))}
       </div>
+
+      {/* Expiration Alerts */}
+      {hasAlerts && (
+        <Card className="border-destructive/50 bg-destructive/5">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="flex size-8 items-center justify-center rounded-lg bg-destructive/10">
+                  <AlertTriangle className="size-4 text-destructive" />
+                </div>
+                <div>
+                  <CardTitle className="text-base">{t.dashboard.expirationAlerts}</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {t.dashboard.documentsNeedAttention}
+                  </p>
+                </div>
+              </div>
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/documents">
+                  {t.dashboard.viewAll}
+                  <ArrowRight className="ml-1.5 size-3.5" />
+                </Link>
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Summary */}
+            <div className="flex gap-3">
+              {expiredDocs.length > 0 && (
+                <div className="flex items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2">
+                  <AlertTriangle className="size-4 text-destructive" />
+                  <div>
+                    <p className="text-sm font-semibold text-destructive">{expiredDocs.length}</p>
+                    <p className="text-xs text-muted-foreground">{t.dashboard.expired}</p>
+                  </div>
+                </div>
+              )}
+              {criticalDocs.length > 0 && (
+                <div className="flex items-center gap-2 rounded-lg bg-orange-500/10 px-3 py-2">
+                  <AlertTriangle className="size-4 text-orange-600" />
+                  <div>
+                    <p className="text-sm font-semibold text-orange-600">{criticalDocs.length}</p>
+                    <p className="text-xs text-muted-foreground">{t.dashboard.critical}</p>
+                  </div>
+                </div>
+              )}
+              {warningDocs.length > 0 && (
+                <div className="flex items-center gap-2 rounded-lg bg-yellow-500/10 px-3 py-2">
+                  <Clock className="size-4 text-yellow-700" />
+                  <div>
+                    <p className="text-sm font-semibold text-yellow-700">{warningDocs.length}</p>
+                    <p className="text-xs text-muted-foreground">{t.dashboard.attention}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Document List */}
+            <div className="space-y-2">
+              {alertDocs.map((doc) => {
+                const category = categories.find((c) => c.id === doc.categoryId);
+                const status = getExpirationStatus(doc.expiresAt);
+                const days = getDaysUntilExpiration(doc.expiresAt);
+                
+                const statusConfig = {
+                  expired: {
+                    icon: AlertTriangle,
+                    color: "text-destructive",
+                    bg: "bg-destructive/10",
+                    text: t.documents.expired,
+                  },
+                  critical: {
+                    icon: AlertTriangle,
+                    color: "text-orange-600",
+                    bg: "bg-orange-500/10",
+                    text: days !== null ? `${days} ${days === 1 ? t.documents.day : t.documents.days}` : t.dashboard.critical,
+                  },
+                  warning: {
+                    icon: Clock,
+                    color: "text-yellow-700",
+                    bg: "bg-yellow-500/10",
+                    text: days !== null ? `${days} ${t.documents.days}` : t.dashboard.attention,
+                  },
+                  normal: {
+                    icon: Clock,
+                    color: "text-muted-foreground",
+                    bg: "bg-muted",
+                    text: "Normal",
+                  },
+                  none: {
+                    icon: Clock,
+                    color: "text-muted-foreground",
+                    bg: "bg-muted",
+                    text: t.documents.noExpiration,
+                  },
+                };
+                
+                const config = statusConfig[status];
+                const Icon = config.icon;
+                
+                return (
+                  <div
+                    key={doc.id}
+                    className="flex items-center gap-3 rounded-lg border bg-background p-3 hover:bg-muted/50 transition-colors"
+                  >
+                    <div className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${config.bg}`}>
+                      <Icon className={`size-4 ${config.color}`} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {doc.name}
+                      </p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {category && (
+                          <Badge variant="secondary" className="text-xs">
+                            {category.name}
+                          </Badge>
+                        )}
+                        <span className="text-xs text-muted-foreground">
+                          v{doc.currentVersion}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className={`text-sm font-semibold ${config.color}`}>
+                        {config.text}
+                      </p>
+                      {doc.expiresAt && (
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(doc.expiresAt).toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid min-w-0 gap-6 lg:grid-cols-2">
         {/* Recent Activity */}

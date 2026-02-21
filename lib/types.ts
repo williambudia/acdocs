@@ -46,8 +46,34 @@ export interface Document {
   uploadedById: string;
   currentVersion: number;
   versions: DocumentVersion[];
+  expiresAt?: string; // Data de expiração (opcional)
+  alertDaysBefore?: number; // Dias antes para alertar (padrão: 30)
   createdAt: string;
   updatedAt: string;
+}
+
+// Helper para calcular status de expiração
+export type ExpirationStatus = "expired" | "critical" | "warning" | "normal" | "none";
+
+export function getExpirationStatus(expiresAt?: string): ExpirationStatus {
+  if (!expiresAt) return "none";
+  
+  const now = new Date();
+  const expirationDate = new Date(expiresAt);
+  const daysUntilExpiration = Math.ceil((expirationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  
+  if (daysUntilExpiration < 0) return "expired";
+  if (daysUntilExpiration <= 7) return "critical";
+  if (daysUntilExpiration <= 30) return "warning";
+  return "normal";
+}
+
+export function getDaysUntilExpiration(expiresAt?: string): number | null {
+  if (!expiresAt) return null;
+  
+  const now = new Date();
+  const expirationDate = new Date(expiresAt);
+  return Math.ceil((expirationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 }
 
 export interface DocumentVersion {

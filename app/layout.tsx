@@ -8,7 +8,7 @@ const geistSans = Geist({ subsets: ["latin"], variable: "--font-sans" });
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
-  title: "DocManager - Gerenciamento de Documentos",
+  title: "ACDocs - Gerenciamento de Documentos",
   description:
     "Plataforma segura e centralizada para gerenciamento de documentos",
   generator: "v0.app",

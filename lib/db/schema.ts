@@ -1,7 +1,7 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { User, Group, Category, Document, AuditLog, DocumentType } from '@/lib/types';
 
-export interface DocManagerDB extends DBSchema {
+export interface ACDocsDB extends DBSchema {
   users: {
     key: string;
     value: User;
@@ -53,12 +53,23 @@ export interface DocManagerDB extends DBSchema {
   };
 }
 
-let dbInstance: IDBPDatabase<DocManagerDB> | null = null;
+let dbInstance: IDBPDatabase<ACDocsDB> | null = null;
 
-export async function initDB(): Promise<IDBPDatabase<DocManagerDB>> {
+export async function initDB(): Promise<IDBPDatabase<ACDocsDB>> {
   if (dbInstance) return dbInstance;
 
-  dbInstance = await openDB<DocManagerDB>('docmanager-db', 1, {
+  // Clean up old database if it exists
+  try {
+    const databases = await indexedDB.databases();
+    const oldDb = databases.find(db => db.name === 'docmanager-db');
+    if (oldDb) {
+      indexedDB.deleteDatabase('docmanager-db');
+    }
+  } catch (e) {
+    // Ignore errors - some browsers don't support databases()
+  }
+
+  dbInstance = await openDB<ACDocsDB>('acdocs-db', 1, {
     upgrade(db) {
       // Users store
       const userStore = db.createObjectStore('users', { keyPath: 'id' });
@@ -96,7 +107,7 @@ export async function initDB(): Promise<IDBPDatabase<DocManagerDB>> {
   return dbInstance;
 }
 
-export async function getDB(): Promise<IDBPDatabase<DocManagerDB>> {
+export async function getDB(): Promise<IDBPDatabase<ACDocsDB>> {
   if (!dbInstance) {
     return await initDB();
   }

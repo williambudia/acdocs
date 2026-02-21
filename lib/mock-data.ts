@@ -4,7 +4,7 @@ export const mockUsers: User[] = [
   {
     id: "u1",
     name: "Carlos Silva",
-    email: "owner@docmanager.com",
+    email: "owner@acdocs.com",
     role: "owner",
     groupIds: ["g1", "g2", "g3"],
     createdAt: "2025-01-15T10:00:00Z",
@@ -12,7 +12,7 @@ export const mockUsers: User[] = [
   {
     id: "u2",
     name: "Ana Souza",
-    email: "admin@docmanager.com",
+    email: "admin@acdocs.com",
     role: "admin",
     groupIds: ["g1", "g2"],
     createdAt: "2025-02-01T10:00:00Z",
@@ -20,7 +20,7 @@ export const mockUsers: User[] = [
   {
     id: "u3",
     name: "Roberto Lima",
-    email: "manager@docmanager.com",
+    email: "manager@acdocs.com",
     role: "manager",
     groupIds: ["g1"],
     createdAt: "2025-03-01T10:00:00Z",
@@ -28,7 +28,7 @@ export const mockUsers: User[] = [
   {
     id: "u4",
     name: "Maria Santos",
-    email: "user@docmanager.com",
+    email: "user@acdocs.com",
     role: "user",
     groupIds: ["g2"],
     createdAt: "2025-03-15T10:00:00Z",
@@ -36,7 +36,7 @@ export const mockUsers: User[] = [
   {
     id: "u5",
     name: "João Oliveira",
-    email: "reader@docmanager.com",
+    email: "reader@acdocs.com",
     role: "reader",
     groupIds: ["g3"],
     createdAt: "2025-04-01T10:00:00Z",
@@ -189,6 +189,8 @@ export const mockDocuments: Document[] = [
     documentTypeId: "dt3",
     uploadedById: "u1",
     currentVersion: 2,
+    expiresAt: "2026-03-15T00:00:00Z", // Expira em março de 2026
+    alertDaysBefore: 30,
     versions: [
       {
         id: "v1",
@@ -222,6 +224,8 @@ export const mockDocuments: Document[] = [
     documentTypeId: "dt11",
     uploadedById: "u2",
     currentVersion: 1,
+    expiresAt: "2026-02-25T00:00:00Z", // Expira em 4 dias (crítico)
+    alertDaysBefore: 15,
     versions: [
       {
         id: "v3",
@@ -246,6 +250,7 @@ export const mockDocuments: Document[] = [
     documentTypeId: "dt23",
     uploadedById: "u3",
     currentVersion: 1,
+    // Sem data de expiração
     versions: [
       {
         id: "v4",
@@ -270,6 +275,8 @@ export const mockDocuments: Document[] = [
     documentTypeId: "dt32",
     uploadedById: "u4",
     currentVersion: 1,
+    expiresAt: "2026-02-18T00:00:00Z", // Vencido (ontem)
+    alertDaysBefore: 30,
     versions: [
       {
         id: "v5",
@@ -294,6 +301,8 @@ export const mockDocuments: Document[] = [
     documentTypeId: "dt39",
     uploadedById: "u1",
     currentVersion: 3,
+    expiresAt: "2026-03-10T00:00:00Z", // Expira em ~18 dias (warning)
+    alertDaysBefore: 30,
     versions: [
       {
         id: "v6",
