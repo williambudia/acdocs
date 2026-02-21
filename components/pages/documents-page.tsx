@@ -12,12 +12,20 @@ import {
   Clock,
   Plus,
   X,
+  Filter,
+  CalendarDays,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import {
   Dialog,
   DialogContent,
@@ -79,6 +87,10 @@ export function DocumentsPage() {
 
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState<string>("all");
+  const [filterDocumentType, setFilterDocumentType] = useState<string>("all");
+  const [filterUploadedBy, setFilterUploadedBy] = useState<string>("all");
+  const [filterDateFrom, setFilterDateFrom] = useState<string>("");
+  const [filterDateTo, setFilterDateTo] = useState<string>("");
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [showVersionsDialog, setShowVersionsDialog] = useState<Document | null>(
     null
@@ -99,10 +111,34 @@ export function DocumentsPage() {
   const filteredDocuments = documents.filter((doc) => {
     const matchesSearch = doc.name
       .toLowerCase()
-      .includes(search.toLowerCase());
+      .includes(search.toLowerCase()) ||
+      doc.fileName
+        .toLowerCase()
+        .includes(search.toLowerCase());
+    
     const matchesCategory =
       filterCategory === "all" || doc.categoryId === filterCategory;
-    return matchesSearch && matchesCategory;
+    
+    const matchesDocumentType =
+      filterDocumentType === "all" || doc.documentTypeId === filterDocumentType;
+    
+    const matchesUploadedBy =
+      filterUploadedBy === "all" || doc.uploadedById === filterUploadedBy;
+    
+    const matchesDateRange = (() => {
+      if (!filterDateFrom && !filterDateTo) return true;
+      
+      const docDate = new Date(doc.createdAt);
+      const fromDate = filterDateFrom ? new Date(filterDateFrom) : null;
+      const toDate = filterDateTo ? new Date(filterDateTo + "T23:59:59") : null;
+      
+      if (fromDate && docDate < fromDate) return false;
+      if (toDate && docDate > toDate) return false;
+      
+      return true;
+    })();
+    
+    return matchesSearch && matchesCategory && matchesDocumentType && matchesUploadedBy && matchesDateRange;
   });
 
   const selectedCategory = categories.find((c) => c.id === uploadCategoryId);
@@ -159,6 +195,18 @@ export function DocumentsPage() {
     setUploadFile(null);
   };
 
+  const clearAllFilters = () => {
+    setSearch("");
+    setFilterCategory("all");
+    setFilterDocumentType("all");
+    setFilterUploadedBy("all");
+    setFilterDateFrom("");
+    setFilterDateTo("");
+  };
+
+  const hasActiveFilters = search || filterCategory !== "all" || filterDocumentType !== "all" || 
+    filterUploadedBy !== "all" || filterDateFrom || filterDateTo;
+
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString(undefined, {
       day: "2-digit",
@@ -172,45 +220,228 @@ export function DocumentsPage() {
   return (
     <div className="flex flex-col gap-6 p-4 md:p-6">
       {/* Toolbar */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-muted-foreground whitespace-nowrap">
-          {documents.length} {t.documents.title.toLowerCase()}
-        </p>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 sm:w-56">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder={t.common.search}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-10"
-            />
+      <div className="flex flex-col gap-4">
+        {/* Header com contador, busca rápida e botão de upload */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-4">
+            <p className="text-sm text-muted-foreground whitespace-nowrap">
+              {filteredDocuments.length} de {documents.length} {t.documents.title.toLowerCase()}
+            </p>
+            {hasActiveFilters && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={clearAllFilters}
+                className="text-xs"
+              >
+                <X className="mr-1 size-3" />
+                Limpar filtros
+              </Button>
+            )}
           </div>
-          <Select value={filterCategory} onValueChange={setFilterCategory}>
-            <SelectTrigger className="w-44">
-              <SelectValue placeholder={t.documents.category} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">
-                {t.categories.title}
-              </SelectItem>
-              {categories.map((cat) => (
-                <SelectItem key={cat.id} value={cat.id}>
-                  {cat.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {canUpload && (
-            <Button
-              onClick={() => setShowUploadDialog(true)}
-              size="sm"
-            >
-              <Upload className="mr-1.5 size-4" />
-              {t.documents.uploadFile}
-            </Button>
-          )}
+
+          <div className="flex items-center gap-3">
+            {/* Busca Rápida */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Busca rápida..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-10 w-64"
+              />
+            </div>
+
+            {canUpload && (
+              <Button onClick={() => setShowUploadDialog(true)} size="sm">
+                <Upload className="mr-1.5 size-4" />
+                {t.documents.uploadFile}
+              </Button>
+            )}
+          </div>
         </div>
+
+        {/* Filtros Avançados em Accordion */}
+        <Accordion type="single" collapsible className="w-full">
+          <AccordionItem value="filters" className="border rounded-lg">
+            <AccordionTrigger className="px-4 py-3 hover:no-underline">
+              <div className="flex items-center gap-2">
+                <Filter className="size-4" />
+                <span className="font-medium">Filtros Avançados</span>
+                {hasActiveFilters && (
+                  <Badge variant="secondary" className="ml-2 text-xs">
+                    {[
+                      filterCategory !== "all" && "Categoria",
+                      filterDocumentType !== "all" && "Tipo", 
+                      filterUploadedBy !== "all" && "Usuário",
+                      (filterDateFrom || filterDateTo) && "Data"
+                    ].filter(Boolean).length} ativo(s)
+                  </Badge>
+                )}
+              </div>
+            </AccordionTrigger>
+            <AccordionContent className="px-4 pb-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                {/* Filtro por Categoria */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Categoria</Label>
+                  <Select value={filterCategory} onValueChange={setFilterCategory}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Todas as categorias" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas as categorias</SelectItem>
+                      {categories.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.id}>
+                          {cat.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Filtro por Tipo de Documento */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Tipo de Documento</Label>
+                  <Select value={filterDocumentType} onValueChange={setFilterDocumentType}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Todos os tipos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os tipos</SelectItem>
+                      {categories
+                        .flatMap(cat => cat.documentTypes)
+                        .filter((type, index, self) => 
+                          self.findIndex(t => t.id === type.id) === index
+                        )
+                        .map((type) => (
+                          <SelectItem key={type.id} value={type.id}>
+                            {type.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Filtro por Usuário */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Enviado por</Label>
+                  <Select value={filterUploadedBy} onValueChange={setFilterUploadedBy}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Todos os usuários" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os usuários</SelectItem>
+                      {users.map((user) => (
+                        <SelectItem key={user.id} value={user.id}>
+                          {user.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Filtro por Período - Date Range */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Período</Label>
+                  <div className="space-y-3">
+                    {/* Presets rápidos */}
+                    <div className="flex flex-wrap gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-xs h-7"
+                        onClick={() => {
+                          const today = new Date();
+                          const lastWeek = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+                          setFilterDateFrom(lastWeek.toISOString().split('T')[0]);
+                          setFilterDateTo(today.toISOString().split('T')[0]);
+                        }}
+                      >
+                        7 dias
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-xs h-7"
+                        onClick={() => {
+                          const today = new Date();
+                          const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
+                          setFilterDateFrom(lastMonth.toISOString().split('T')[0]);
+                          setFilterDateTo(today.toISOString().split('T')[0]);
+                        }}
+                      >
+                        30 dias
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-xs h-7"
+                        onClick={() => {
+                          setFilterDateFrom("");
+                          setFilterDateTo("");
+                        }}
+                      >
+                        Limpar
+                      </Button>
+                    </div>
+                    
+                    {/* Range personalizado */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="relative">
+                        <CalendarDays className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          type="date"
+                          placeholder="Data inicial"
+                          value={filterDateFrom}
+                          onChange={(e) => setFilterDateFrom(e.target.value)}
+                          className="pl-10 text-sm"
+                        />
+                      </div>
+                      <div className="relative">
+                        <CalendarDays className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          type="date"
+                          placeholder="Data final"
+                          value={filterDateTo}
+                          onChange={(e) => setFilterDateTo(e.target.value)}
+                          className="pl-10 text-sm"
+                        />
+                      </div>
+                    </div>
+                    
+                    {/* Indicador do range selecionado */}
+                    {(filterDateFrom || filterDateTo) && (
+                      <div className="text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1">
+                        {filterDateFrom && filterDateTo ? (
+                          <>De {new Date(filterDateFrom).toLocaleDateString()} até {new Date(filterDateTo).toLocaleDateString()}</>
+                        ) : filterDateFrom ? (
+                          <>A partir de {new Date(filterDateFrom).toLocaleDateString()}</>
+                        ) : (
+                          <>Até {new Date(filterDateTo).toLocaleDateString()}</>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Ações dos Filtros */}
+              {hasActiveFilters && (
+                <div className="flex justify-end mt-4 pt-4 border-t">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={clearAllFilters}
+                  >
+                    <X className="mr-1 size-3" />
+                    Limpar todos os filtros
+                  </Button>
+                </div>
+              )}
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </div>
 
       {/* Documents Table */}
