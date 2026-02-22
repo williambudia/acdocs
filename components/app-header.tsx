@@ -1,6 +1,7 @@
 "use client";
 
-import { Moon, Sun, Globe, PanelLeft } from "lucide-react";
+import { useState } from "react";
+import { Moon, Sun, Globe, PanelLeft, Bell } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { useSidebar } from "@/components/ui/sidebar";
@@ -11,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useI18n } from "@/lib/i18n/context";
+import { NotificationSettingsDialog } from "@/components/notification-settings-dialog";
 
 interface AppHeaderProps {
   title: string;
@@ -20,6 +22,7 @@ export function AppHeader({ title }: AppHeaderProps) {
   const { theme, setTheme } = useTheme();
   const { locale, setLocale } = useI18n();
   const { toggleSidebar, isMobile } = useSidebar();
+  const [showNotificationSettings, setShowNotificationSettings] = useState(false);
 
   return (
     <header className="relative z-10 flex h-14 shrink-0 items-center px-4 shadow-[0_1px_4px_-1px_rgba(0,0,0,0.06)]">
@@ -37,6 +40,17 @@ export function AppHeader({ title }: AppHeaderProps) {
       <h1 className="flex-1 text-lg font-semibold truncate">{title}</h1>
 
       <div className="flex items-center gap-1">
+        {/* Notifications */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8"
+          onClick={() => setShowNotificationSettings(true)}
+        >
+          <Bell className="size-4" />
+          <span className="sr-only">Notifications</span>
+        </Button>
+
         {/* Language Switcher */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -73,6 +87,11 @@ export function AppHeader({ title }: AppHeaderProps) {
           <span className="sr-only">Toggle theme</span>
         </Button>
       </div>
+
+      <NotificationSettingsDialog
+        open={showNotificationSettings}
+        onOpenChange={setShowNotificationSettings}
+      />
     </header>
   );
 }

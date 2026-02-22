@@ -8,6 +8,13 @@ export const mockUsers: User[] = [
     role: "owner",
     groupIds: ["g1", "g2", "g3"],
     createdAt: "2025-01-15T10:00:00Z",
+    phone: "+55 11 98765-4321",
+    notificationPreferences: {
+      email: true,
+      whatsapp: true,
+      browser: true,
+      alertDaysBefore: [7, 15, 30],
+    },
   },
   {
     id: "u2",
@@ -16,6 +23,13 @@ export const mockUsers: User[] = [
     role: "admin",
     groupIds: ["g1", "g2"],
     createdAt: "2025-02-01T10:00:00Z",
+    phone: "+55 11 98765-1234",
+    notificationPreferences: {
+      email: true,
+      whatsapp: false,
+      browser: true,
+      alertDaysBefore: [7, 30],
+    },
   },
   {
     id: "u3",
@@ -24,6 +38,12 @@ export const mockUsers: User[] = [
     role: "manager",
     groupIds: ["g1"],
     createdAt: "2025-03-01T10:00:00Z",
+    notificationPreferences: {
+      email: true,
+      whatsapp: false,
+      browser: false,
+      alertDaysBefore: [15],
+    },
   },
   {
     id: "u4",
@@ -32,6 +52,12 @@ export const mockUsers: User[] = [
     role: "user",
     groupIds: ["g2"],
     createdAt: "2025-03-15T10:00:00Z",
+    notificationPreferences: {
+      email: false,
+      whatsapp: false,
+      browser: true,
+      alertDaysBefore: [7],
+    },
   },
   {
     id: "u5",
@@ -40,6 +66,12 @@ export const mockUsers: User[] = [
     role: "reader",
     groupIds: ["g3"],
     createdAt: "2025-04-01T10:00:00Z",
+    notificationPreferences: {
+      email: true,
+      whatsapp: false,
+      browser: false,
+      alertDaysBefore: [30],
+    },
   },
 ];
 

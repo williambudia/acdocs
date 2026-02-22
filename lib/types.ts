@@ -8,6 +8,14 @@ export interface User {
   avatar?: string;
   groupIds: string[];
   createdAt: string;
+  // Notification settings
+  phone?: string; // Número do WhatsApp
+  notificationPreferences?: {
+    email: boolean;
+    whatsapp: boolean;
+    browser: boolean;
+    alertDaysBefore: number[]; // Ex: [7, 15, 30] - alertar nesses dias
+  };
 }
 
 export interface Group {
@@ -84,6 +92,19 @@ export interface DocumentVersion {
   fileSize: number;
   uploadedById: string;
   createdAt: string;
+}
+
+export interface Notification {
+  id: string;
+  userId: string;
+  documentId: string;
+  documentName: string;
+  type: "email" | "whatsapp" | "browser";
+  status: "sent" | "failed" | "pending";
+  message: string;
+  sentAt: string;
+  expiresAt?: string; // Data de expiração do documento
+  daysUntilExpiration?: number;
 }
 
 export interface AuditLog {
