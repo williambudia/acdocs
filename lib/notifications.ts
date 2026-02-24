@@ -7,18 +7,22 @@ export class NotificationService {
 
   // Solicitar permissão para notificações do navegador
   static async requestBrowserPermission(): Promise<boolean> {
-    if (!("Notification" in window)) {
+    if (typeof window === 'undefined' || !("Notification" in window)) {
       console.log("Este navegador não suporta notificações");
       return false;
     }
 
-    if (Notification.permission === "granted") {
-      return true;
-    }
+    try {
+      if (Notification.permission === "granted") {
+        return true;
+      }
 
-    if (Notification.permission !== "denied") {
-      const permission = await Notification.requestPermission();
-      return permission === "granted";
+      if (Notification.permission !== "denied") {
+        const permission = await Notification.requestPermission();
+        return permission === "granted";
+      }
+    } catch (error) {
+      console.warn("Erro ao solicitar permissão de notificação:", error);
     }
 
     return false;
@@ -30,15 +34,20 @@ export class NotificationService {
     body: string,
     data?: any
   ): Promise<boolean> {
-    if (Notification.permission !== "granted") {
+    if (typeof window === 'undefined' || !("Notification" in window)) {
+      console.log("Notificações não suportadas");
       return false;
     }
 
     try {
+      if (Notification.permission !== "granted") {
+        return false;
+      }
+
       const notification = new Notification(title, {
         body,
-        icon: "/icon-192.png", // Você pode adicionar um ícone depois
-        badge: "/icon-192.png",
+        icon: "/acdocs/icon-192.png",
+        badge: "/acdocs/icon-192.png",
         tag: data?.documentId || "notification",
         requireInteraction: true,
         data,
