@@ -223,7 +223,7 @@ export function NotificationSettingsDialog({
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    {Notification.permission === "granted" ? (
+                    {typeof window !== 'undefined' && "Notification" in window && Notification.permission === "granted" ? (
                       <Checkbox
                         id="browser"
                         checked={browserEnabled}
@@ -238,7 +238,7 @@ export function NotificationSettingsDialog({
                       variant="ghost"
                       size="sm"
                       onClick={() => handleTest("browser")}
-                      disabled={!browserEnabled || Notification.permission !== "granted"}
+                      disabled={!browserEnabled || (typeof window !== 'undefined' && "Notification" in window && Notification.permission !== "granted")}
                     >
                       <Send className="size-3 mr-1" />
                       Testar
