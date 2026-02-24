@@ -65,8 +65,15 @@ import { DocumentsSkeleton } from "@/components/skeletons";
 import { useDocuments, useCreateDocument, useDeleteDocument } from "@/lib/queries/documents";
 import { useCategories } from "@/lib/queries/categories";
 import { useUsers } from "@/lib/queries/users";
+import { useGroups } from "@/lib/queries/groups";
 import type { Document } from "@/lib/types";
-import { getExpirationStatus, getDaysUntilExpiration } from "@/lib/types";
+import { 
+  getExpirationStatus, 
+  getDaysUntilExpiration,
+  getAccessibleCategories,
+  getAccessibleDocuments,
+  canModifyDocument,
+} from "@/lib/types";
 import { Checkbox } from "@/components/ui/checkbox";
 
 function formatBytes(bytes: number) {
@@ -128,8 +135,13 @@ export function DocumentsPage() {
   const { data: documents = [], isLoading } = useDocuments();
   const { data: categories = [] } = useCategories();
   const { data: users = [] } = useUsers();
+  const { data: groups = [] } = useGroups();
   const createDocumentMutation = useCreateDocument();
   const deleteDocumentMutation = useDeleteDocument();
+
+  // Filtrar dados baseado em permissões de grupo
+  const accessibleCategories = user ? getAccessibleCategories(user, categories, groups) : [];
+  const accessibleDocuments = user ? getAccessibleDocuments(user, documents, categories, groups) : [];
 
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState<string>("all");
@@ -158,7 +170,31 @@ export function DocumentsPage() {
   const canUpload = can("documents:create");
   const canDelete = can("documents:delete") || can("documents:delete:own");
 
-  const filteredDocuments = documents.filter((doc) => {
+  // Filtros em cascata - documentos filtrados pela categoria selecionada
+  const documentsFilteredByCategory = filterCategory === "all" 
+    ? accessibleDocuments 
+    : accessibleDocuments.filter(doc => doc.categoryId === filterCategory);
+
+  // Tipos de documento disponíveis baseados na categoria selecionada
+  const availableDocumentTypes = filterCategory === "all"
+    ? accessibleCategories.flatMap(cat => cat.documentTypes)
+    : accessibleCategories
+        .filter(cat => cat.id === filterCategory)
+        .flatMap(cat => cat.documentTypes);
+
+  // Documentos filtrados por categoria E tipo
+  const documentsFilteredByCategoryAndType = filterDocumentType === "all"
+    ? documentsFilteredByCategory
+    : documentsFilteredByCategory.filter(doc => doc.documentTypeId === filterDocumentType);
+
+  // Usuários que fizeram upload baseado em categoria E tipo selecionados
+  const availableUploaders = Array.from(
+    new Set(documentsFilteredByCategoryAndType.map(doc => doc.uploadedById))
+  )
+    .map(userId => users.find(u => u.id === userId))
+    .filter((u): u is typeof users[0] => u !== undefined);
+
+  const filteredDocuments = accessibleDocuments.filter((doc) => {
     const matchesSearch = doc.name
       .toLowerCase()
       .includes(search.toLowerCase()) ||
@@ -197,7 +233,28 @@ export function DocumentsPage() {
     return matchesSearch && matchesCategory && matchesDocumentType && matchesUploadedBy && matchesDateRange && matchesExpirationStatus;
   });
 
-  const selectedCategory = categories.find((c) => c.id === uploadCategoryId);
+  const selectedCategory = accessibleCategories.find((c) => c.id === uploadCategoryId);
+
+  // Resetar filtros dependentes quando categoria ou tipo mudar
+  useEffect(() => {
+    // Se mudou a categoria
+    if (filterCategory !== "all") {
+      // Verificar se o tipo de documento selecionado pertence à categoria
+      const typeExists = availableDocumentTypes.some(t => t.id === filterDocumentType);
+      if (!typeExists && filterDocumentType !== "all") {
+        setFilterDocumentType("all");
+      }
+    }
+
+    // Se mudou o tipo de documento ou categoria
+    if (filterCategory !== "all" || filterDocumentType !== "all") {
+      // Verificar se o usuário selecionado tem documentos com esse filtro
+      const userExists = availableUploaders.some(u => u.id === filterUploadedBy);
+      if (!userExists && filterUploadedBy !== "all") {
+        setFilterUploadedBy("all");
+      }
+    }
+  }, [filterCategory, filterDocumentType, availableDocumentTypes, availableUploaders, filterUploadedBy]);
 
   const handleUpload = async () => {
     if (!uploadName.trim() || !uploadCategoryId || !uploadTypeId || !user) return;
@@ -287,7 +344,7 @@ export function DocumentsPage() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
             <p className="text-sm text-muted-foreground whitespace-nowrap">
-              {filteredDocuments.length} de {documents.length} {t.documents.title.toLowerCase()}
+              {filteredDocuments.length} de {accessibleDocuments.length} {t.documents.title.toLowerCase()}
             </p>
             {hasActiveFilters && (
               <Button
@@ -354,26 +411,45 @@ export function DocumentsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todas as categorias</SelectItem>
-                      {categories.map((cat) => (
+                      {accessibleCategories.map((cat) => (
                         <SelectItem key={cat.id} value={cat.id}>
                           {cat.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  {filterCategory !== "all" && (
+                    <p className="text-xs text-muted-foreground">
+                      Filtros ajustados para esta categoria
+                    </p>
+                  )}
                 </div>
 
                 {/* Filtro por Tipo de Documento */}
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium">Tipo de Documento</Label>
-                  <Select value={filterDocumentType} onValueChange={setFilterDocumentType}>
+                  <Label className="text-sm font-medium">
+                    Tipo de Documento
+                    {filterCategory !== "all" && availableDocumentTypes.length > 0 && (
+                      <span className="ml-1 text-xs text-muted-foreground">
+                        ({availableDocumentTypes.length})
+                      </span>
+                    )}
+                  </Label>
+                  <Select 
+                    value={filterDocumentType} 
+                    onValueChange={setFilterDocumentType}
+                    disabled={filterCategory === "all" || availableDocumentTypes.length === 0}
+                  >
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Todos os tipos" />
+                      <SelectValue placeholder={
+                        filterCategory === "all" 
+                          ? "Selecione uma categoria primeiro" 
+                          : "Todos os tipos"
+                      } />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todos os tipos</SelectItem>
-                      {categories
-                        .flatMap(cat => cat.documentTypes)
+                      {availableDocumentTypes
                         .filter((type, index, self) => 
                           self.findIndex(t => t.id === type.id) === index
                         )
@@ -384,24 +460,49 @@ export function DocumentsPage() {
                         ))}
                     </SelectContent>
                   </Select>
+                  {filterCategory === "all" && (
+                    <p className="text-xs text-muted-foreground">
+                      Selecione uma categoria para filtrar por tipo
+                    </p>
+                  )}
                 </div>
 
                 {/* Filtro por Usuário */}
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium">Enviado por</Label>
-                  <Select value={filterUploadedBy} onValueChange={setFilterUploadedBy}>
+                  <Label className="text-sm font-medium">
+                    Enviado por
+                    {(filterCategory !== "all" || filterDocumentType !== "all") && availableUploaders.length > 0 && (
+                      <span className="ml-1 text-xs text-muted-foreground">
+                        ({availableUploaders.length})
+                      </span>
+                    )}
+                  </Label>
+                  <Select 
+                    value={filterUploadedBy} 
+                    onValueChange={setFilterUploadedBy}
+                    disabled={filterCategory === "all" && filterDocumentType === "all"}
+                  >
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Todos os usuários" />
+                      <SelectValue placeholder={
+                        filterCategory === "all" && filterDocumentType === "all"
+                          ? "Selecione categoria ou tipo primeiro"
+                          : "Todos os usuários"
+                      } />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todos os usuários</SelectItem>
-                      {users.map((user) => (
+                      {availableUploaders.map((user) => (
                         <SelectItem key={user.id} value={user.id}>
                           {user.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  {filterCategory === "all" && filterDocumentType === "all" && (
+                    <p className="text-xs text-muted-foreground">
+                      Selecione categoria ou tipo para filtrar por usuário
+                    </p>
+                  )}
                 </div>
 
                 {/* Filtro por Status de Validade */}
@@ -616,7 +717,7 @@ export function DocumentsPage() {
                           >
                             <Download className="size-3.5" />
                           </Button>
-                          {canDelete && (
+                          {canDelete && user && canModifyDocument(user, doc) && (
                             <Button
                               variant="ghost"
                               size="icon"
@@ -683,7 +784,7 @@ export function DocumentsPage() {
                   <SelectValue placeholder={t.documents.category} />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories.map((cat) => (
+                  {accessibleCategories.map((cat) => (
                     <SelectItem key={cat.id} value={cat.id}>
                       {cat.name}
                     </SelectItem>

@@ -131,7 +131,7 @@ export type AuditAction =
 
 // Permission matrix
 export const PERMISSIONS: Record<Role, string[]> = {
-  owner: ["*"],
+  owner: ["*"], // Acesso total
   admin: [
     "categories:create",
     "categories:read",
@@ -145,28 +145,33 @@ export const PERMISSIONS: Record<Role, string[]> = {
     "groups:read",
     "groups:update",
     "groups:delete",
+    "users:create",
     "users:read",
     "users:update",
+    "users:delete",
     "audit:read",
   ],
   manager: [
+    "categories:create", // Manager pode criar categorias para organizar
     "categories:read",
+    "categories:update",
     "documents:create",
     "documents:read",
     "documents:update",
+    "documents:delete", // Manager pode deletar documentos do time
     "groups:read",
-    "groups:update",
-    "users:read",
-    "audit:read",
+    "groups:update", // Manager pode gerenciar seus grupos
+    "audit:read", // Manager pode ver auditoria do time
   ],
   user: [
-    "categories:read",
     "documents:create",
     "documents:read",
-    "documents:update:own",
-    "documents:delete:own",
+    "documents:update:own", // Apenas seus próprios
+    "documents:delete:own", // Apenas seus próprios
   ],
-  reader: ["categories:read", "documents:read"],
+  reader: [
+    "documents:read", // Apenas leitura
+  ],
 };
 
 export function hasPermission(role: Role, permission: string): boolean {
@@ -176,5 +181,85 @@ export function hasPermission(role: Role, permission: string): boolean {
   // Check wildcard permissions (e.g., "documents:*")
   const [resource] = permission.split(":");
   if (perms.includes(`${resource}:*`)) return true;
+  return false;
+}
+
+// Helper para verificar se usuário pode acessar uma categoria
+export function canAccessCategory(user: User, category: Category, groups: Group[]): boolean {
+  // Owner e Admin podem acessar tudo
+  if (user.role === "owner" || user.role === "admin") return true;
+  
+  // Verificar se a categoria está compartilhada com algum grupo do usuário
+  const userGroupIds = user.groupIds;
+  const categoryGroupIds = category.sharedWithGroupIds;
+  
+  return categoryGroupIds.some(groupId => userGroupIds.includes(groupId));
+}
+
+// Helper para verificar se usuário pode acessar um documento
+export function canAccessDocument(
+  user: User, 
+  document: Document, 
+  categories: Category[], 
+  groups: Group[]
+): boolean {
+  // Owner e Admin podem acessar tudo
+  if (user.role === "owner" || user.role === "admin") return true;
+  
+  // Usuário pode acessar seus próprios documentos
+  if (document.uploadedById === user.id) return true;
+  
+  // Verificar se o documento pertence a uma categoria acessível
+  const category = categories.find(c => c.id === document.categoryId);
+  if (!category) return false;
+  
+  return canAccessCategory(user, category, groups);
+}
+
+// Helper para filtrar categorias acessíveis pelo usuário
+export function getAccessibleCategories(user: User, categories: Category[], groups: Group[]): Category[] {
+  if (user.role === "owner" || user.role === "admin") {
+    return categories;
+  }
+  
+  return categories.filter(category => canAccessCategory(user, category, groups));
+}
+
+// Helper para filtrar documentos acessíveis pelo usuário
+export function getAccessibleDocuments(
+  user: User, 
+  documents: Document[], 
+  categories: Category[], 
+  groups: Group[]
+): Document[] {
+  if (user.role === "owner" || user.role === "admin") {
+    return documents;
+  }
+  
+  return documents.filter(document => canAccessDocument(user, document, categories, groups));
+}
+
+// Helper para filtrar grupos acessíveis pelo usuário
+export function getAccessibleGroups(user: User, groups: Group[]): Group[] {
+  if (user.role === "owner" || user.role === "admin") {
+    return groups;
+  }
+  
+  // Usuários podem ver apenas os grupos dos quais fazem parte
+  return groups.filter(group => group.memberIds.includes(user.id));
+}
+
+// Helper para verificar se usuário pode editar/deletar documento
+export function canModifyDocument(user: User, document: Document): boolean {
+  // Owner e Admin podem modificar tudo
+  if (user.role === "owner" || user.role === "admin") return true;
+  
+  // Manager pode modificar documentos das categorias do seu grupo
+  if (user.role === "manager") return true;
+  
+  // User pode modificar apenas seus próprios documentos
+  if (user.role === "user") return document.uploadedById === user.id;
+  
+  // Reader não pode modificar nada
   return false;
 }

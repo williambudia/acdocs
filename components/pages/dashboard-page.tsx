@@ -31,7 +31,12 @@ import { useGroups } from "@/lib/queries/groups";
 import { useUsers } from "@/lib/queries/users";
 import { useAuditLogs } from "@/lib/queries/audit";
 import type { AuditAction } from "@/lib/types";
-import { getExpirationStatus, getDaysUntilExpiration } from "@/lib/types";
+import { 
+  getExpirationStatus, 
+  getDaysUntilExpiration,
+  getAccessibleCategories,
+  getAccessibleDocuments,
+} from "@/lib/types";
 
 const actionIcons: Record<AuditAction, React.ElementType> = {
   upload: Upload,
@@ -58,7 +63,7 @@ const actionColors: Record<AuditAction, string> = {
 export function DashboardPage() {
   const router = useRouter();
   const { t } = useI18n();
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   
   // React Query hooks
   const { data: documents = [], isLoading: documentsLoading } = useDocuments();
@@ -71,39 +76,47 @@ export function DashboardPage() {
 
   if (isLoading) return <DashboardSkeleton />;
 
+  // Filtrar dados baseado em permissões de grupo
+  const accessibleCategories = user ? getAccessibleCategories(user, categories, groups) : [];
+  const accessibleDocuments = user ? getAccessibleDocuments(user, documents, categories, groups) : [];
+
   // Expiration alerts
-  const expiredDocs = documents.filter(doc => getExpirationStatus(doc.expiresAt) === "expired");
-  const criticalDocs = documents.filter(doc => getExpirationStatus(doc.expiresAt) === "critical");
-  const warningDocs = documents.filter(doc => getExpirationStatus(doc.expiresAt) === "warning");
+  const expiredDocs = accessibleDocuments.filter(doc => getExpirationStatus(doc.expiresAt) === "expired");
+  const criticalDocs = accessibleDocuments.filter(doc => getExpirationStatus(doc.expiresAt) === "critical");
+  const warningDocs = accessibleDocuments.filter(doc => getExpirationStatus(doc.expiresAt) === "warning");
   const alertDocs = [...expiredDocs, ...criticalDocs, ...warningDocs].slice(0, 5);
   const hasAlerts = expiredDocs.length > 0 || criticalDocs.length > 0 || warningDocs.length > 0;
 
   const stats = [
     {
       label: t.dashboard.totalDocuments,
-      value: documents.length,
+      value: accessibleDocuments.length,
       icon: FileText,
       href: "/documents",
+      show: true, // Todos veem documentos
     },
     {
       label: t.dashboard.totalCategories,
-      value: categories.length,
+      value: accessibleCategories.length,
       icon: FolderTree,
       href: "/categories",
+      show: can("categories:read"), // Apenas quem pode ver categorias
     },
     {
       label: t.dashboard.totalGroups,
       value: groups.length,
       icon: UsersRound,
       href: "/groups",
+      show: can("groups:read"), // Apenas quem pode ver grupos
     },
     {
       label: t.dashboard.totalUsers,
       value: users.length,
       icon: Users,
       href: "/users",
+      show: can("users:read"), // Apenas quem pode ver usuários
     },
-  ];
+  ].filter(stat => stat.show);
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -123,7 +136,12 @@ export function DashboardPage() {
       </p>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className={`grid gap-4 ${
+        stats.length === 1 ? 'grid-cols-1' :
+        stats.length === 2 ? 'grid-cols-2' :
+        stats.length === 3 ? 'grid-cols-2 lg:grid-cols-3' :
+        'grid-cols-2 lg:grid-cols-4'
+      }`}>
         {stats.map((stat) => (
           <Card
             key={stat.label}
@@ -202,7 +220,7 @@ export function DashboardPage() {
             {/* Document List */}
             <div className="space-y-2">
               {alertDocs.map((doc) => {
-                const category = categories.find((c) => c.id === doc.categoryId);
+                const category = accessibleCategories.find((c) => c.id === doc.categoryId);
                 const status = getExpirationStatus(doc.expiresAt);
                 const days = getDaysUntilExpiration(doc.expiresAt);
                 
@@ -284,77 +302,88 @@ export function DashboardPage() {
       )}
 
       <div className="grid min-w-0 gap-6 lg:grid-cols-2">
-        {/* Recent Activity */}
-        <Card className="min-w-0 overflow-hidden">
-          <CardHeader className="flex flex-row items-center justify-between pb-3">
-            <CardTitle className="text-base">{t.dashboard.recentActivity}</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            {auditLogs.slice(0, 6).map((log) => {
-              const Icon = actionIcons[log.action];
-              return (
-                <div
-                  key={log.id}
-                  className="flex items-start gap-3 rounded-lg p-2 transition-colors hover:bg-muted/50"
-                >
-                  <div
-                    className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${actionColors[log.action]}`}
-                  >
-                    <Icon className="size-4" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-foreground truncate">
-                      {log.resourceName}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {log.userName} &middot;{" "}
-                      {t.audit.actions[log.action as keyof typeof t.audit.actions]}
-                    </p>
-                  </div>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {formatDate(log.createdAt)}
-                  </span>
-                </div>
-              );
-            })}
-          </CardContent>
-        </Card>
-
-        {/* Quick Actions + Recent Documents */}
-        <div className="flex min-w-0 flex-col gap-6">
+        {/* Recent Activity - Apenas para quem pode ver auditoria */}
+        {can("audit:read") && (
           <Card className="min-w-0 overflow-hidden">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">{t.dashboard.quickActions}</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <CardTitle className="text-base">{t.dashboard.recentActivity}</CardTitle>
             </CardHeader>
-            <CardContent className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" asChild>
-                <Link href="/documents">
-                  <Upload className="mr-1.5 size-4" />
-                  {t.dashboard.uploadDocument}
-                </Link>
-              </Button>
-              <Button variant="outline" size="sm" asChild>
-                <Link href="/categories">
-                  <Plus className="mr-1.5 size-4" />
-                  {t.dashboard.createCategory}
-                </Link>
-              </Button>
-              <Button variant="outline" size="sm" asChild>
-                <Link href="/groups">
-                  <UsersRound className="mr-1.5 size-4" />
-                  {t.dashboard.manageGroups}
-                </Link>
-              </Button>
+            <CardContent className="flex flex-col gap-3">
+              {auditLogs.slice(0, 6).map((log) => {
+                const Icon = actionIcons[log.action];
+                return (
+                  <div
+                    key={log.id}
+                    className="flex items-start gap-3 rounded-lg p-2 transition-colors hover:bg-muted/50"
+                  >
+                    <div
+                      className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${actionColors[log.action]}`}
+                    >
+                      <Icon className="size-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {log.resourceName}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {log.userName} &middot;{" "}
+                        {t.audit.actions[log.action as keyof typeof t.audit.actions]}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {formatDate(log.createdAt)}
+                    </span>
+                  </div>
+                );
+              })}
             </CardContent>
           </Card>
+        )}
+
+        {/* Quick Actions + Recent Documents */}
+        <div className={`flex min-w-0 flex-col gap-6 ${!can("audit:read") ? "lg:col-span-2" : ""}`}>
+          {/* Quick Actions - Apenas se tiver alguma ação disponível */}
+          {(can("documents:create") || can("categories:create") || can("groups:update")) && (
+            <Card className="min-w-0 overflow-hidden">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">{t.dashboard.quickActions}</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-wrap gap-2">
+                {can("documents:create") && (
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href="/documents">
+                      <Upload className="mr-1.5 size-4" />
+                      {t.dashboard.uploadDocument}
+                    </Link>
+                  </Button>
+                )}
+                {can("categories:create") && (
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href="/categories">
+                      <Plus className="mr-1.5 size-4" />
+                      {t.dashboard.createCategory}
+                    </Link>
+                  </Button>
+                )}
+                {can("groups:update") && (
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href="/groups">
+                      <UsersRound className="mr-1.5 size-4" />
+                      {t.dashboard.manageGroups}
+                    </Link>
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="min-w-0 overflow-hidden">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">{t.dashboard.recentDocuments}</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-2">
-              {documents.slice(0, 5).map((doc) => {
-                const category = categories.find((c) => c.id === doc.categoryId);
+              {accessibleDocuments.slice(0, 5).map((doc) => {
+                const category = accessibleCategories.find((c) => c.id === doc.categoryId);
                 return (
                   <div
                     key={doc.id}

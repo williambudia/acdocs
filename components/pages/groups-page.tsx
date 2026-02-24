@@ -49,10 +49,11 @@ import { useGroups, useCreateGroup, useUpdateGroup, useDeleteGroup } from "@/lib
 import { useUsers } from "@/lib/queries/users";
 import { useCategories } from "@/lib/queries/categories";
 import type { Group } from "@/lib/types";
+import { getAccessibleGroups } from "@/lib/types";
 
 export function GroupsPage() {
   const { t } = useI18n();
-  const { can } = useAuth();
+  const { user, can } = useAuth();
   
   // React Query hooks
   const { data: groups = [], isLoading } = useGroups();
@@ -61,6 +62,9 @@ export function GroupsPage() {
   const createGroupMutation = useCreateGroup();
   const updateGroupMutation = useUpdateGroup();
   const deleteGroupMutation = useDeleteGroup();
+
+  // Filtrar grupos acessíveis
+  const accessibleGroups = user ? getAccessibleGroups(user, groups) : [];
 
   const [search, setSearch] = useState("");
   const [showDialog, setShowDialog] = useState(false);
@@ -76,7 +80,7 @@ export function GroupsPage() {
   const canEdit = can("groups:update");
   const canDelete = can("groups:delete");
 
-  const filteredGroups = groups.filter((g) =>
+  const filteredGroups = accessibleGroups.filter((g) =>
     g.name.toLowerCase().includes(search.toLowerCase())
   );
 

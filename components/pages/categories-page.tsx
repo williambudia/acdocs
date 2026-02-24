@@ -57,7 +57,9 @@ import { useI18n } from "@/lib/i18n/context";
 import { useAuth } from "@/lib/auth/context";
 import { CategoriesSkeleton } from "@/components/skeletons";
 import { useCategories, useCreateCategory, useUpdateCategory, useDeleteCategory, useCreateDocumentType, useDeleteDocumentType } from "@/lib/queries/categories";
+import { useGroups } from "@/lib/queries/groups";
 import type { Category } from "@/lib/types";
+import { getAccessibleCategories } from "@/lib/types";
 
 const iconMap: Record<string, React.ElementType> = {
   User,
@@ -81,10 +83,11 @@ const iconOptions = [
 
 export function CategoriesPage() {
   const { t } = useI18n();
-  const { can } = useAuth();
+  const { user, can } = useAuth();
   
   // React Query hooks
   const { data: categories = [], isLoading } = useCategories();
+  const { data: groups = [] } = useGroups();
   const createCategoryMutation = useCreateCategory();
   const updateCategoryMutation = useUpdateCategory();
   const deleteCategoryMutation = useDeleteCategory();
@@ -104,7 +107,10 @@ export function CategoriesPage() {
   const canEdit = can("categories:update") || can("categories:create");
   const canDelete = can("categories:delete");
 
-  const filteredCategories = categories.filter((cat) =>
+  // Filtrar categorias acessíveis baseado em grupos
+  const accessibleCategories = user ? getAccessibleCategories(user, categories, groups) : [];
+
+  const filteredCategories = accessibleCategories.filter((cat) =>
     cat.name.toLowerCase().includes(search.toLowerCase())
   );
 
