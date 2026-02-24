@@ -17,6 +17,25 @@ interface AuthContextType {
 
 const AUTH_STORAGE_KEY = "acdocs_auth_user";
 
+// Helper para acessar storage de forma segura
+const getStorage = () => {
+  try {
+    if (typeof window !== 'undefined') {
+      // Tenta localStorage primeiro (mais confiável no iOS)
+      if (window.localStorage) {
+        return window.localStorage;
+      }
+      // Fallback para sessionStorage
+      if (window.sessionStorage) {
+        return window.sessionStorage;
+      }
+    }
+  } catch (error) {
+    console.warn('Storage not available:', error);
+  }
+  return null;
+};
+
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -26,30 +45,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const authenticateMutation = useAuthenticateUser();
   const logoutMutation = useLogoutUser();
 
-  // Hydrate from sessionStorage after mount (client only)
+  // Hydrate from storage after mount (client only)
   useEffect(() => {
     try {
-      if (typeof window !== 'undefined' && window.sessionStorage) {
-        const stored = sessionStorage.getItem(AUTH_STORAGE_KEY);
+      const storage = getStorage();
+      if (storage) {
+        const stored = storage.getItem(AUTH_STORAGE_KEY);
         if (stored) {
           setUser(JSON.parse(stored) as User);
         }
       }
     } catch (error) {
-      console.warn('SessionStorage not available:', error);
+      console.warn('Failed to load auth state:', error);
     }
     setHydrated(true);
   }, []);
 
-  // Persist user changes to sessionStorage
+  // Persist user changes to storage
   useEffect(() => {
     if (!hydrated) return;
     try {
-      if (typeof window !== 'undefined' && window.sessionStorage) {
+      const storage = getStorage();
+      if (storage) {
         if (user) {
-          sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
+          storage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
         } else {
-          sessionStorage.removeItem(AUTH_STORAGE_KEY);
+          storage.removeItem(AUTH_STORAGE_KEY);
         }
       }
     } catch (error) {
