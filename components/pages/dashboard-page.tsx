@@ -38,6 +38,51 @@ import {
   getAccessibleDocuments,
 } from "@/lib/types";
 
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error?: Error }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('Dashboard error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex min-h-[400px] items-center justify-center p-4">
+          <Card className="max-w-md">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-destructive">
+                <AlertTriangle className="size-5" />
+                Erro ao carregar dashboard
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-4">
+                {this.state.error?.message || 'Ocorreu um erro inesperado'}
+              </p>
+              <Button onClick={() => window.location.reload()}>
+                Recarregar página
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 const actionIcons: Record<AuditAction, React.ElementType> = {
   upload: Upload,
   download: Download,
@@ -64,26 +109,49 @@ export function DashboardPage() {
   const router = useRouter();
   const { t } = useI18n();
   const { user, can } = useAuth();
-  
-  // React Query hooks
-  const { data: documents = [], isLoading: documentsLoading } = useDocuments();
-  const { data: categories = [], isLoading: categoriesLoading } = useCategories();
-  const { data: groups = [], isLoading: groupsLoading } = useGroups();
-  const { data: users = [], isLoading: usersLoading } = useUsers();
-  const { data: auditLogs = [], isLoading: auditLoading } = useAuditLogs();
-  
+
+  // React Query hooks with error handling
+  const { data: documents = [], isLoading: documentsLoading, error: documentsError } = useDocuments();
+  const { data: categories = [], isLoading: categoriesLoading, error: categoriesError } = useCategories();
+  const { data: groups = [], isLoading: groupsLoading, error: groupsError } = useGroups();
+  const { data: users = [], isLoading: usersLoading, error: usersError } = useUsers();
+  const { data: auditLogs = [], isLoading: auditLoading, error: auditError } = useAuditLogs();
+
   const isLoading = documentsLoading || categoriesLoading || groupsLoading || usersLoading || auditLoading;
+  const hasError = documentsError || categoriesError || groupsError || usersError || auditError;
+
+  if (hasError) {
+    console.error('Dashboard data loading errors:', { documentsError, categoriesError, groupsError, usersError, auditError });
+  }
 
   if (isLoading) return <DashboardSkeleton />;
 
-  // Filtrar dados baseado em permissões de grupo
-  const accessibleCategories = user ? getAccessibleCategories(user, categories, groups) : [];
-  const accessibleDocuments = user ? getAccessibleDocuments(user, documents, categories, groups) : [];
+  // Filtrar dados baseado em permissões de grupo com tratamento de erro
+  let accessibleCategories = categories;
+  let accessibleDocuments = documents;
 
-  // Expiration alerts
-  const expiredDocs = accessibleDocuments.filter(doc => getExpirationStatus(doc.expiresAt) === "expired");
-  const criticalDocs = accessibleDocuments.filter(doc => getExpirationStatus(doc.expiresAt) === "critical");
-  const warningDocs = accessibleDocuments.filter(doc => getExpirationStatus(doc.expiresAt) === "warning");
+  try {
+    if (user) {
+      accessibleCategories = getAccessibleCategories(user, categories, groups);
+      accessibleDocuments = getAccessibleDocuments(user, documents, categories, groups);
+    }
+  } catch (err) {
+    console.error('Error filtering accessible data:', err);
+  }
+
+  // Expiration alerts com tratamento de erro
+  let expiredDocs: typeof documents = [];
+  let criticalDocs: typeof documents = [];
+  let warningDocs: typeof documents = [];
+
+  try {
+    expiredDocs = accessibleDocuments.filter(doc => getExpirationStatus(doc.expiresAt) === "expired");
+    criticalDocs = accessibleDocuments.filter(doc => getExpirationStatus(doc.expiresAt) === "critical");
+    warningDocs = accessibleDocuments.filter(doc => getExpirationStatus(doc.expiresAt) === "warning");
+  } catch (err) {
+    console.error('Error calculating expiration status:', err);
+  }
+
   const alertDocs = [...expiredDocs, ...criticalDocs, ...warningDocs].slice(0, 5);
   const hasAlerts = expiredDocs.length > 0 || criticalDocs.length > 0 || warningDocs.length > 0;
 
@@ -93,39 +161,47 @@ export function DashboardPage() {
       value: accessibleDocuments.length,
       icon: FileText,
       href: "/documents",
-      show: true, // Todos veem documentos
+      show: true,
     },
     {
       label: t.dashboard.totalCategories,
       value: accessibleCategories.length,
       icon: FolderTree,
       href: "/categories",
-      show: can("categories:read"), // Apenas quem pode ver categorias
+      show: can("categories:read"),
     },
     {
       label: t.dashboard.totalGroups,
       value: groups.length,
       icon: UsersRound,
       href: "/groups",
-      show: can("groups:read"), // Apenas quem pode ver grupos
+      show: can("groups:read"),
     },
     {
       label: t.dashboard.totalUsers,
       value: users.length,
       icon: Users,
       href: "/users",
-      show: can("users:read"), // Apenas quem pode ver usuários
+      show: can("users:read"),
     },
   ].filter(stat => stat.show);
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString(undefined, {
-      day: "2-digit",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) {
+        return dateStr;
+      }
+      return date.toLocaleDateString(undefined, {
+        day: "2-digit",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch (error) {
+      console.warn('Date formatting error:', error);
+      return dateStr;
+    }
   };
 
   return (
@@ -223,7 +299,7 @@ export function DashboardPage() {
                 const category = accessibleCategories.find((c) => c.id === doc.categoryId);
                 const status = getExpirationStatus(doc.expiresAt);
                 const days = getDaysUntilExpiration(doc.expiresAt);
-                
+
                 const statusConfig = {
                   expired: {
                     icon: AlertTriangle,
@@ -256,10 +332,10 @@ export function DashboardPage() {
                     text: t.documents.noExpiration,
                   },
                 };
-                
+
                 const config = statusConfig[status];
                 const Icon = config.icon;
-                
+
                 return (
                   <div
                     key={doc.id}
@@ -302,7 +378,7 @@ export function DashboardPage() {
       )}
 
       <div className="grid min-w-0 gap-6 lg:grid-cols-2">
-        {/* Recent Activity - Apenas para quem pode ver auditoria */}
+        {/* Recent Activity */}
         {can("audit:read") && (
           <Card className="min-w-0 overflow-hidden">
             <CardHeader className="flex flex-row items-center justify-between pb-3">
@@ -342,7 +418,7 @@ export function DashboardPage() {
 
         {/* Quick Actions + Recent Documents */}
         <div className={`flex min-w-0 flex-col gap-6 ${!can("audit:read") ? "lg:col-span-2" : ""}`}>
-          {/* Quick Actions - Apenas se tiver alguma ação disponível */}
+          {/* Quick Actions */}
           {(can("documents:create") || can("categories:create") || can("groups:update")) && (
             <Card className="min-w-0 overflow-hidden">
               <CardHeader className="pb-3">

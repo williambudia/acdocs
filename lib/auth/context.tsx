@@ -29,12 +29,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Hydrate from sessionStorage after mount (client only)
   useEffect(() => {
     try {
-      const stored = sessionStorage.getItem(AUTH_STORAGE_KEY);
-      if (stored) {
-        setUser(JSON.parse(stored) as User);
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        const stored = sessionStorage.getItem(AUTH_STORAGE_KEY);
+        if (stored) {
+          setUser(JSON.parse(stored) as User);
+        }
       }
-    } catch {
-      // ignore
+    } catch (error) {
+      console.warn('SessionStorage not available:', error);
     }
     setHydrated(true);
   }, []);
@@ -42,10 +44,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Persist user changes to sessionStorage
   useEffect(() => {
     if (!hydrated) return;
-    if (user) {
-      sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
-    } else {
-      sessionStorage.removeItem(AUTH_STORAGE_KEY);
+    try {
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        if (user) {
+          sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
+        } else {
+          sessionStorage.removeItem(AUTH_STORAGE_KEY);
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to persist auth state:', error);
     }
   }, [user, hydrated]);
 
