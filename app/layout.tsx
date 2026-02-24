@@ -3,7 +3,15 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { Providers } from "@/components/providers";
 import { ErrorLogger } from "@/components/error-logger";
+import { ErrorBoundary } from "@/components/error-boundary";
 import "./globals.css";
+
+// Inicializar compatibilidade iOS no cliente
+if (typeof window !== 'undefined') {
+  import('@/lib/ios-compat').then(({ initIOSCompat }) => {
+    initIOSCompat();
+  });
+}
 
 const geistSans = Geist({ subsets: ["latin"], variable: "--font-sans" });
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" });
@@ -41,8 +49,10 @@ export default function RootLayout({
   return (
     <html lang="pt" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}>
-        <Providers>{children}</Providers>
-        <ErrorLogger />
+        <ErrorBoundary>
+          <Providers>{children}</Providers>
+          <ErrorLogger />
+        </ErrorBoundary>
         <Analytics />
       </body>
     </html>

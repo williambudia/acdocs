@@ -7,6 +7,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { AppHeader } from "@/components/app-header";
 import { useAuth } from "@/lib/auth/context";
 import { useI18n } from "@/lib/i18n/context";
+import { ErrorBoundary } from "@/components/error-boundary";
 
 const routeTitles: Record<string, string> = {
   "/dashboard": "dashboard",
@@ -55,12 +56,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pageTitle = t.nav[titleKey as keyof typeof t.nav] || "";
 
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
-        <AppHeader title={pageTitle} />
-        <div className="flex-1 overflow-auto min-w-0">{children}</div>
-      </SidebarInset>
-    </SidebarProvider>
+    <ErrorBoundary>
+      <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset>
+          <AppHeader title={pageTitle} />
+          <div className="flex-1 overflow-auto min-w-0">{children}</div>
+        </SidebarInset>
+      </SidebarProvider>
+    </ErrorBoundary>
   );
 }

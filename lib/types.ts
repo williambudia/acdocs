@@ -66,22 +66,50 @@ export type ExpirationStatus = "expired" | "critical" | "warning" | "normal" | "
 export function getExpirationStatus(expiresAt?: string): ExpirationStatus {
   if (!expiresAt) return "none";
   
-  const now = new Date();
-  const expirationDate = new Date(expiresAt);
-  const daysUntilExpiration = Math.ceil((expirationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-  
-  if (daysUntilExpiration < 0) return "expired";
-  if (daysUntilExpiration <= 7) return "critical";
-  if (daysUntilExpiration <= 30) return "warning";
-  return "normal";
+  try {
+    const now = new Date();
+    // Normalizar formato de data para Safari
+    const dateStr = expiresAt.includes(' ') ? expiresAt.replace(' ', 'T') : expiresAt;
+    const expirationDate = new Date(dateStr);
+    
+    // Validar se a data é válida
+    if (isNaN(expirationDate.getTime())) {
+      console.warn('Invalid expiration date:', expiresAt);
+      return "none";
+    }
+    
+    const daysUntilExpiration = Math.ceil((expirationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (daysUntilExpiration < 0) return "expired";
+    if (daysUntilExpiration <= 7) return "critical";
+    if (daysUntilExpiration <= 30) return "warning";
+    return "normal";
+  } catch (error) {
+    console.error('Error calculating expiration status:', error);
+    return "none";
+  }
 }
 
 export function getDaysUntilExpiration(expiresAt?: string): number | null {
   if (!expiresAt) return null;
   
-  const now = new Date();
-  const expirationDate = new Date(expiresAt);
-  return Math.ceil((expirationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  try {
+    const now = new Date();
+    // Normalizar formato de data para Safari
+    const dateStr = expiresAt.includes(' ') ? expiresAt.replace(' ', 'T') : expiresAt;
+    const expirationDate = new Date(dateStr);
+    
+    // Validar se a data é válida
+    if (isNaN(expirationDate.getTime())) {
+      console.warn('Invalid expiration date:', expiresAt);
+      return null;
+    }
+    
+    return Math.ceil((expirationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  } catch (error) {
+    console.error('Error calculating days until expiration:', error);
+    return null;
+  }
 }
 
 export interface DocumentVersion {
