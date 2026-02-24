@@ -12,11 +12,11 @@ export const metadata: Metadata = {
   description:
     "Plataforma segura e centralizada para gerenciamento de documentos",
   generator: "v0.app",
-  manifest: "/manifest.json",
+  manifest: "/acdocs/manifest.json",
   icons: {
     icon: [
-      { url: "/icon.svg", type: "image/svg+xml" },
-      { url: "/favicon.ico", sizes: "any" },
+      { url: "/acdocs/icon.svg", type: "image/svg+xml" },
+      { url: "/acdocs/favicon.ico", sizes: "any" },
     ],
   },
 };
